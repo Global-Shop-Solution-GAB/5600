@@ -1,0 +1,178 @@
+Program.Sub.ScreenSU.Start
+Gui.FormUsage..Create
+Gui.FormUsage..Size(15360,10695)
+Gui.FormUsage..MinX(0)
+Gui.FormUsage..MinY(0)
+Gui.FormUsage..Position(0,0)
+Gui.FormUsage..BackColor(-2147483633)
+Gui.FormUsage..MousePointer(0)
+Gui.FormUsage..Event(UnLoad,FormUsage_UnLoad)
+Gui.FormUsage..Caption("Slow Moving Inventory")
+Gui.FormUsage.GsGridControl1.Create(GsGridControl)
+Gui.FormUsage.GsGridControl1.Size(14895,9645)
+Gui.FormUsage.GsGridControl1.Position(120,90)
+Gui.FormUsage.GsGridControl1.Anchor(15)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'coded by SFF 5/29/2019
+'inventory Usage with some expression columns that are used for making decisions on obsoleting parts.
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String," ")
+	f.ODBC.Connection!con.opencompanyconnection
+	
+	'get current YTD + Prior year Inventory History Date Range
+	f.Intrinsic.Control.CallSub(CalcMonths)
+	'any preload items.
+	f.Intrinsic.Control.CallSub(Init)
+	'load data and show grid.
+	f.Intrinsic.Control.CallSub(LoadGrid)
+	
+	gui.FormUsage..Show
+
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5600_Inventory_Usage.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.FormUsage_UnLoad.Start
+f.Intrinsic.Control.End
+Program.Sub.FormUsage_UnLoad.End
+
+Program.Sub.LoadGrid.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String," ")
+	v.Local.sSql.Declare(String,"")
+	V.Local.iDateNum.Declare(Long,0)
+	
+	F.Intrinsic.Date.DateDiff("M",V.Global.dDateStart,V.Ambient.Date,V.Local.iDateNum)
+	'get data based on SQL
+	F.Intrinsic.String.Build("Select a.Part, a.Location, a.Product_line, a.Description, a.UM_INVENTORY,a.CODE_SORT,a.CODE_SOURCE, a.QTY_ONHAND,b.COST,cast(a.QTY_ONHAND * b.COST as Numeric(12,4)) as Ext_Cost, (Select sum(case code_transaction when 'W10' then (Quantity * -1) else abs(quantity) end)/{0}*12 from v_INVENTORY_HIST c where date_history > '{1}' and code_transaction NOT in ('P16','J52','P10','P18') and a.part = c.part and a.location = c.location group by c.part, c.location) as ann_usage from v_INVENTORY_ALL a join v_INVENTORY_COST B on a.PART = b.PART and a.location = b.locn",V.Local.iDateNum,V.Global.dDateStart.PervasiveDate,V.Local.sSql)
+	
+	f.Data.DataTable.CreateFromSQL("dtParts","con",v.Local.sSql)
+	
+	f.Data.DataTable.AddExpressionColumn("dtParts","Overstock",Float,"[QTY_ONHAND] - isNull([ann_usage],0)")
+	f.Data.DataTable.AddExpressionColumn("dtParts","Yrs",Float,"[QTY_ONHAND] / isNull([ann_usage],1)")
+	
+	gui.FormUsage.GsGridControl1.AddGridviewFromDatatable("gvParts","dtParts")
+	
+	'format Columns
+	gui.FormUsage.GsGridControl1.SetGridviewProperty("gvParts","enableappearanceoddrow",True)
+	Gui.FormUsage.GsGridControl1.SetGridviewProperty("gvParts","Editable",False)
+	Gui.FormUsage.GsGridControl1.SetGridviewProperty("gvParts","ReadOnly",True)
+	
+	'captions
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Product_Line","Caption","Prod Line")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","CODE_SORT","Caption","Sort Code")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","CODE_SOURCE","Caption","Source")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","QTY_ONHAND","Caption","Qty On-Hand")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","COST","Caption","Unit Cost")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Ext_Cost","Caption","Ext. Cost")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Part","Caption","Part")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Location","Caption","Location")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","ann_usage","Caption","Ann. Usage")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","UM_INVENTORY","Caption","UM")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Overstock","Caption","Overstock")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Yrs","Caption","# Yrs")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Description","Caption","Description")
+	
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Product_Line","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","CODE_SORT","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","CODE_SOURCE","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","QTY_ONHAND","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","COST","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Ext_Cost","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Part","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Location","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","ann_usage","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","UM_INVENTORY","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Overstock","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Yrs","HeaderBackColor","Green")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Description","HeaderBackColor","Green")
+	
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Product_Line","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","CODE_SORT","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","CODE_SOURCE","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","QTY_ONHAND","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","COST","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Ext_Cost","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Part","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Location","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","ann_usage","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","UM_INVENTORY","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Overstock","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Yrs","HeaderForeColor","White")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Description","HeaderForeColor","White")
+	
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","QTY_ONHAND","DisplayCustomString","#0.000")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","ann_usage","DisplayCustomString","#0.000")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Overstock","DisplayCustomString","#0.000")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Yrs","DisplayCustomString","#0.00")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","COST","DisplayCustomString","#0.0000")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Ext_Cost","DisplayCustomString","#0.000")
+	
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Part","VisibleIndex","0")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Location","VisibleIndex","1")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Description","VisibleIndex","2")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Product_Line","VisibleIndex","3")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","CODE_SORT","VisibleIndex","4")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","CODE_SOURCE","VisibleIndex","5")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","UM_INVENTORY","VisibleIndex","6")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","QTY_ONHAND","VisibleIndex","7")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","ann_usage","VisibleIndex","8")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Overstock","VisibleIndex","9")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Yrs","VisibleIndex","10")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","COST","VisibleIndex","11")
+	gui.FormUsage.GsGridControl1.SetColumnProperty("gvParts","Ext_Cost","VisibleIndex","12")
+	
+	gui.FormUsage.GsGridControl1.MainView("gvParts")
+	
+
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5600_Inventory_Usage.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.LoadGrid.End
+
+Program.Sub.Init.Start
+Program.Sub.Init.End
+
+Program.Sub.CalcMonths.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String," ")
+	v.Global.dDateStart.Declare(Date)
+	v.Global.sDate.Declare(String)
+	v.Global.iMonths.Declare(Long)
+	v.Local.sTemp.Declare(String)
+	v.Global.iYr.Declare(Long)
+	'get # months current year + Prior Year (Dynamic # months-Prior based on todays date)
+	
+	f.Intrinsic.Date.Year(v.Ambient.Date,v.Global.iYr)
+	f.Intrinsic.Math.Sub(v.Global.iYr,1,v.Global.iYr)
+	f.Intrinsic.String.Build("01/01/{0}",v.Global.iYr.String,v.Local.sTemp)
+	f.Intrinsic.Date.ConvertDString(v.Local.sTemp,"MM/DD/YYYY",v.Global.dDateStart)
+	f.Intrinsic.Date.DateDiff("M",v.Global.dDateStart,v.Ambient.Date,v.Global.iMonths)
+	
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5600_Inventory_Usage.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+
+Program.Sub.CalcMonths.End
